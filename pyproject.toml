@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "video-processor"
+version = "0.1.0"
+description = "Video processing service"
+dependencies = [
+    "fastapi==0.109.2",
+    "uvicorn==0.27.1",
+    "python-multipart==0.0.9",
+    "pydantic==2.6.1",
+    "pydantic-settings>=2.0.3"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0"
+]
