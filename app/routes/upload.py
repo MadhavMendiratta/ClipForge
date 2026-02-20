@@ -1,16 +1,18 @@
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
 from app.core.settings import settings
 from app.utils.files import get_file_extension, get_video_path, save_upload_metadata
+from app.utils.processing import process_video, stub_processor
 
 router = APIRouter()
 
 
 @router.post("/upload")
 async def upload_video(
+    background_tasks: BackgroundTasks,
     video: UploadFile = File(...),
     edit_text: Optional[str] = Form(None),
     remove_silence: bool = Form(False),
@@ -35,6 +37,7 @@ async def upload_video(
         f.write(contents)
 
     processing_options: Dict[str, Any] = {}
+
     if edit_text:
         processing_options["edit_text"] = edit_text
     if remove_silence:
@@ -50,9 +53,12 @@ async def upload_video(
         processing_options=processing_options,
     )
 
+    # Wire background processing
+    background_tasks.add_task(process_video, video_id, stub_processor)
+
     return {
         "status": "success",
+        "message": "Video uploaded successfully. Processing started.",
         "video_id": video_id,
-        "filename": video.filename,
         "processing_options": processing_options,
     }
