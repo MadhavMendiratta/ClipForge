@@ -1,14 +1,14 @@
 import asyncio
 import logging
+import shutil
 from datetime import datetime
 from typing import Any, Callable, Coroutine
 
-from app.core.settings import settings
 from app.utils.files import (
     get_metadata,
+    get_video_path,
     update_metadata_processing_status,
     update_processing_progress,
-    get_video_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,20 @@ class ProcessingContext:
         )
         self.start_time: datetime | None = None
 
-    def update_progress(self, progress: float) -> None:
-        update_processing_progress(self.video_id, progress)
+    def update_progress(
+        self,
+        progress: float,
+        current_step: str = "",
+        total_steps: int = 0,
+        current_step_progress: float = 0,
+    ) -> None:
+        update_processing_progress(
+            self.video_id,
+            progress,
+            current_step,
+            total_steps,
+            current_step_progress,
+        )
 
     def update_status(self, status: str, processed: bool = False) -> None:
         update_metadata_processing_status(self.video_id, status, processed)
@@ -42,8 +54,8 @@ class ProcessingContext:
         duration = datetime.now() - self.start_time
 
         if exc_type is None:
-            self.update_status("completed", processed=True)
             self.update_progress(100)
+            self.update_status("completed", processed=True)
             logger.info(
                 "Video %s completed in %.2f seconds",
                 self.video_id,
@@ -68,13 +80,70 @@ async def process_video(
         await processor(context)
 
 
-async def stub_processor(context: ProcessingContext) -> None:
-    total_steps = 5
+async def video_processor(context: ProcessingContext) -> None:
+    options = context.metadata.get("processing_options", {})
 
-    for step in range(total_steps):
-        progress = ((step + 1) / total_steps) * 100
-        context.update_progress(progress)
-        await asyncio.sleep(1)
+    steps = []
 
-    # For stub: simply copy input → output
-    context.output_path.write_bytes(context.input_path.read_bytes())
+    if options.get("edit_operations"):
+        steps.append(("Natural Language Editing", "nl_edit"))
+    if options.get("remove_silence"):
+        steps.append(("Silence Removal", "silence"))
+    if options.get("auto_crop_face"):
+        steps.append(("Face Auto Crop", "face"))
+
+    if not steps:
+        shutil.copy2(context.input_path, context.output_path)
+        return
+
+    total_steps = len(steps)
+    current_input = context.input_path
+    temp_files = []
+
+    try:
+        for i, (step_name, step_key) in enumerate(steps):
+            is_last = i == total_steps - 1
+            step_output = (
+                context.output_path
+                if is_last
+                else context.input_path.parent
+                / f"_pipeline_{i}_{context.video_id}{context.input_path.suffix}"
+            )
+
+            if not is_last:
+                temp_files.append(step_output)
+
+            base_progress = (i / total_steps) * 100
+            weight = 100 / total_steps
+
+            def progress_cb(sub_progress: float):
+                overall = base_progress + (sub_progress / 100) * weight
+                context.update_progress(
+                    overall,
+                    current_step=step_name,
+                    total_steps=total_steps,
+                    current_step_progress=sub_progress,
+                )
+
+            if step_key == "nl_edit":
+                from app.utils.ffmpeg_ops import apply_operations
+
+                await asyncio.to_thread(
+                    apply_operations,
+                    current_input,
+                    step_output,
+                    options["edit_operations"],
+                    progress_cb,
+                )
+
+            # future steps can be added here
+
+            current_input = step_output
+
+    finally:
+        for tf in temp_files:
+            if tf.exists():
+                try:
+                    tf.unlink()
+                except OSError:
+                    pass

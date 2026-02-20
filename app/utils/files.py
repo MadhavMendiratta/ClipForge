@@ -64,6 +64,45 @@ def get_metadata(video_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Metadata file corrupted")
 
 
+def update_metadata_processing_status(
+    video_id: str, status: str, processed: bool = False
+) -> None:
+    metadata = get_metadata(video_id)
+
+    metadata["status"] = status
+    metadata["processed"] = processed
+    metadata["processing_completed"] = (
+        datetime.now(UTC).isoformat() if processed else None
+    )
+
+    metadata_path = settings.upload_dir / f"{video_id}.json"
+
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+
+def update_processing_progress(
+    video_id: str,
+    progress: float,
+    current_step: str = "",
+    total_steps: int = 0,
+    current_step_progress: float = 0,
+) -> None:
+    metadata = get_metadata(video_id)
+
+    metadata["progress"] = min(100, max(0, progress))
+    metadata["processing_details"] = {
+        "current_step": current_step,
+        "total_steps": total_steps,
+        "current_step_progress": min(100, max(0, current_step_progress)),
+    }
+
+    metadata_path = settings.upload_dir / f"{video_id}.json"
+
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+
 def get_video_file(video_id: str, processed: bool = False) -> Tuple[Path, str]:
     metadata = get_metadata(video_id)
 
