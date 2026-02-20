@@ -1,9 +1,11 @@
+import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
 from app.core.settings import settings
 from app.utils.files import get_metadata, get_video_file
@@ -41,6 +43,54 @@ async def get_video(
 @router.get("/video/{video_id}/metadata")
 async def get_video_metadata(video_id: str) -> Dict:
     return get_metadata(video_id)
+
+
+async def status_event_generator(video_id: str):
+    while True:
+        try:
+            metadata = get_metadata(video_id)
+            status = metadata.get("status", "unknown")
+
+            data = {
+                "video_id": video_id,
+                "status": status,
+                "processed": metadata.get("processed", False),
+                "progress": metadata.get("progress", 0),
+                "processing_details": metadata.get(
+                    "processing_details",
+                    {
+                        "current_step": "",
+                        "total_steps": 0,
+                        "current_step_progress": 0,
+                    },
+                ),
+            }
+
+            yield {"event": "status", "data": json.dumps(data)}
+
+            if (
+                status in ["completed", "error"]
+                or metadata.get("progress", 0) >= 100
+                or metadata.get("processed", False)
+            ):
+                break
+
+            await asyncio.sleep(1)
+
+        except HTTPException as he:
+            yield {"event": "error", "data": json.dumps({"error": he.detail})}
+            break
+        except Exception as e:
+            yield {"event": "error", "data": json.dumps({"error": str(e)})}
+            break
+
+
+@router.get("/video/{video_id}/status/stream")
+async def stream_video_status(video_id: str):
+    return EventSourceResponse(
+        status_event_generator(video_id),
+        media_type="text/event-stream",
+    )
 
 
 @router.get("/videos/list")
