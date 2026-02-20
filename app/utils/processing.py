@@ -83,14 +83,14 @@ async def process_video(
 async def video_processor(context: ProcessingContext) -> None:
     options = context.metadata.get("processing_options", {})
 
-    steps = []
+    steps: list[tuple[str, str]] = []
 
     if options.get("edit_operations"):
         steps.append(("Natural Language Editing", "nl_edit"))
     if options.get("remove_silence"):
-        steps.append(("Silence Removal", "silence"))
+        steps.append(("Silence Removal", "silence_removal"))
     if options.get("auto_crop_face"):
-        steps.append(("Face Auto Crop", "face"))
+        steps.append(("Face Auto-Crop", "face_crop"))
 
     if not steps:
         shutil.copy2(context.input_path, context.output_path)
@@ -103,6 +103,7 @@ async def video_processor(context: ProcessingContext) -> None:
     try:
         for i, (step_name, step_key) in enumerate(steps):
             is_last = i == total_steps - 1
+
             step_output = (
                 context.output_path
                 if is_last
@@ -136,7 +137,25 @@ async def video_processor(context: ProcessingContext) -> None:
                     progress_cb,
                 )
 
-            # future steps can be added here
+            elif step_key == "silence_removal":
+                from app.utils.silence import remove_silence
+
+                await asyncio.to_thread(
+                    remove_silence,
+                    current_input,
+                    step_output,
+                    progress_cb,
+                )
+
+            elif step_key == "face_crop":
+                from app.utils.face_crop import auto_crop_face
+
+                await asyncio.to_thread(
+                    auto_crop_face,
+                    current_input,
+                    step_output,
+                    progress_cb,
+                )
 
             current_input = step_output
 
@@ -146,4 +165,4 @@ async def video_processor(context: ProcessingContext) -> None:
                 try:
                     tf.unlink()
                 except OSError:
-                    pass
+                    logger.warning("Failed to clean up temp file: %s", tf)
