@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 
 from app.core.settings import settings
 from app.utils.files import get_file_extension, get_video_path, save_upload_metadata
-from app.utils.processing import process_video, stub_processor
+from app.utils.processing import process_video, video_processor
 
 router = APIRouter()
 
@@ -38,10 +38,22 @@ async def upload_video(
 
     processing_options: Dict[str, Any] = {}
 
+    # ✅ LLM integration
     if edit_text:
-        processing_options["edit_text"] = edit_text
+        from app.utils.llm import parse_edit_instructions
+
+        try:
+            result = await parse_edit_instructions(edit_text)
+            processing_options["edit_operations"] = result["operations"]
+        except Exception as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Failed to parse edit instructions: {str(e)}",
+            )
+
     if remove_silence:
         processing_options["remove_silence"] = True
+
     if auto_crop_face:
         processing_options["auto_crop_face"] = True
 
@@ -53,8 +65,8 @@ async def upload_video(
         processing_options=processing_options,
     )
 
-    # Wire background processing
-    background_tasks.add_task(process_video, video_id, stub_processor)
+    # ✅ Switch to real processor (IMPORTANT CHANGE)
+    background_tasks.add_task(process_video, video_id, video_processor)
 
     return {
         "status": "success",
