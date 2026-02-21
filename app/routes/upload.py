@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
 from app.core.settings import settings
+from app.models.database import get_preset
 from app.utils.files import get_file_extension, get_video_path, save_upload_metadata
 from app.utils.processing import process_video, video_processor
 
@@ -17,16 +18,35 @@ async def upload_video(
     edit_text: Optional[str] = Form(None),
     remove_silence: bool = Form(False),
     auto_crop_face: bool = Form(False),
+    preset_id: Optional[str] = Form(None),
 ) -> Dict[str, Any]:
 
+    # Validate extension
     extension = get_file_extension(video.filename)
-
     if extension not in settings.allowed_extensions:
         raise HTTPException(
             status_code=400,
             detail=f"File extension not allowed. Allowed: {', '.join(settings.allowed_extensions)}",
         )
 
+    # ── PRESET MERGE LOGIC (MAIN PART) ──
+    if preset_id:
+        preset = get_preset(preset_id)
+        if preset is None:
+            raise HTTPException(status_code=404, detail="Preset not found")
+
+        config = preset["config_json"]
+
+        if edit_text is None:
+            edit_text = config.get("edit_text")
+
+        if not remove_silence:
+            remove_silence = config.get("remove_silence", False)
+
+        if not auto_crop_face:
+            auto_crop_face = config.get("auto_crop_face", False)
+
+    # Save file
     video_id = str(uuid.uuid4())
     video_path = get_video_path(video_id, extension)
 
@@ -36,9 +56,9 @@ async def upload_video(
     with open(video_path, "wb") as f:
         f.write(contents)
 
+    # Processing options
     processing_options: Dict[str, Any] = {}
 
-    # ✅ LLM integration
     if edit_text:
         from app.utils.llm import parse_edit_instructions
 
@@ -65,7 +85,6 @@ async def upload_video(
         processing_options=processing_options,
     )
 
-    # ✅ Switch to real processor (IMPORTANT CHANGE)
     background_tasks.add_task(process_video, video_id, video_processor)
 
     return {
