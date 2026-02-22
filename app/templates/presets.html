@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Presets — StreamForge{% endblock %}
+{% block page_title %}Presets{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto fade-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <p class="text-sm text-surface-500">Save processing configurations for quick reuse</p>
+        </div>
+        <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Create Preset
+        </button>
+    </div>
+
+    <!-- Loading -->
+    <div id="presetsLoading" class="text-center py-16">
+        <svg class="w-8 h-8 text-brand-500 animate-spin mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p class="text-sm text-surface-400">Loading presets…</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="presetsEmpty" class="hidden">
+        <div class="text-center py-16 bg-white rounded-2xl border border-surface-200 shadow-sm">
+            <svg class="w-16 h-16 text-surface-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            <h3 class="text-lg font-semibold text-surface-700 mb-1">No presets yet</h3>
+            <p class="text-sm text-surface-400 mb-4">Create your first preset to save processing configurations</p>
+            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all">
+                Create Preset
+            </button>
+        </div>
+    </div>
+
+    <!-- Preset Grid -->
+    <div id="presetsGrid" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+</div>
+
+<!-- Create Preset Modal -->
+<div id="createModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeCreateModal()"></div>
+    <div class="relative flex items-center justify-center min-h-screen p-4">
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md border border-surface-200 fade-in">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-surface-100">
+                <h3 class="text-base font-semibold text-surface-800">Create Preset</h3>
+                <button onclick="closeCreateModal()" class="p-1 rounded-lg hover:bg-surface-100 transition-colors">
+                    <svg class="w-5 h-5 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <form id="createPresetForm" class="p-6 space-y-5">
+                <div>
+                    <label class="block text-xs font-medium text-surface-600 mb-1.5">Name *</label>
+                    <input type="text" id="presetName" required maxlength="100"
+                        class="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all"
+                        placeholder="e.g. YouTube Shorts Ready">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-surface-600 mb-1.5">Description</label>
+                    <textarea id="presetDesc" rows="2" maxlength="500"
+                        class="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all resize-none"
+                        placeholder="Optional description"></textarea>
+                </div>
+
+                <div class="space-y-4">
+                    <p class="text-xs font-medium text-surface-600">Processing Options</p>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-surface-800">Remove silence</p>
+                            <p class="text-xs text-surface-400">Auto-detect and cut silent parts</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="presetSilence">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-surface-800">Auto-crop to face</p>
+                            <p class="text-xs text-surface-400">Crop to 9:16 vertical</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="presetCrop">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-surface-600 mb-1.5">AI Edit Instructions</label>
+                    <input type="text" id="presetEditText" maxlength="500"
+                        class="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all"
+                        placeholder="Optional — e.g. trim first 5 seconds">
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeCreateModal()"
+                        class="px-4 py-2.5 text-sm font-medium text-surface-600 bg-surface-100 hover:bg-surface-200 rounded-xl transition-all">
+                        Cancel
+                    </button>
+                    <button type="submit" id="createPresetBtn"
+                        class="px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all disabled:opacity-50">
+                        Create
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function openCreateModal() {
+        document.getElementById('createModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeCreateModal() {
+        document.getElementById('createModal').classList.add('hidden');
+        document.body.style.overflow = '';
+        document.getElementById('createPresetForm').reset();
+    }
+
+    // Close modal on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeCreateModal();
+    });
+
+    function formatDate(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    async function loadPresets() {
+        try {
+            const res = await fetch('/api/presets');
+            if (!res.ok) throw new Error('Failed');
+            const presets = await res.json();
+
+            document.getElementById('presetsLoading').classList.add('hidden');
+
+            if (!presets.length) {
+                document.getElementById('presetsEmpty').classList.remove('hidden');
+                return;
+            }
+
+            const grid = document.getElementById('presetsGrid');
+            grid.classList.remove('hidden');
+            grid.innerHTML = presets.map(p => {
+                const cfg = p.config_json || {};
+                const tags = [];
+                if (cfg.remove_silence) tags.push('<span class="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">Silence removal</span>');
+                if (cfg.auto_crop_face) tags.push('<span class="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded">Face crop</span>');
+                if (cfg.edit_text) tags.push('<span class="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded">AI edit</span>');
+
+                return `
+                <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden hover:shadow-md hover:border-surface-300 transition-all">
+                    <div class="p-5">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                            </div>
+                            <span class="text-[10px] text-surface-400">${formatDate(p.created_at)}</span>
+                        </div>
+                        <h4 class="text-sm font-semibold text-surface-800 mb-1">${p.name}</h4>
+                        <p class="text-xs text-surface-400 mb-3 line-clamp-2">${p.description || 'No description'}</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${tags.join('')}
+                            ${!tags.length ? '<span class="text-[10px] text-surface-300">No options</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="px-5 py-3 bg-surface-50 border-t border-surface-100">
+                        <span class="text-[10px] font-mono text-surface-400">ID: ${p.id.slice(0, 8)}…</span>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            document.getElementById('presetsLoading').classList.add('hidden');
+            document.getElementById('presetsEmpty').classList.remove('hidden');
+        }
+    }
+
+    // Create preset form submission
+    document.getElementById('createPresetForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('createPresetBtn');
+        btn.disabled = true;
+        btn.textContent = 'Creating…';
+
+        const config = {};
+        if (document.getElementById('presetSilence').checked) config.remove_silence = true;
+        if (document.getElementById('presetCrop').checked) config.auto_crop_face = true;
+        const editText = document.getElementById('presetEditText').value.trim();
+        if (editText) config.edit_text = editText;
+
+        try {
+            const res = await fetch('/api/presets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: document.getElementById('presetName').value.trim(),
+                    description: document.getElementById('presetDesc').value.trim(),
+                    config_json: config,
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Failed');
+            }
+
+            window.showToast('Preset created!', 'success');
+            closeCreateModal();
+            loadPresets();
+        } catch (e) {
+            window.showToast('Failed: ' + e.message, 'error');
+        }
+
+        btn.disabled = false;
+        btn.textContent = 'Create';
+    });
+
+    loadPresets();
+</script>
+{% endblock %}

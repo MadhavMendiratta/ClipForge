@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block title %}Video {{ video_id[:8] }}… — StreamForge{% endblock %}
+{% block page_title %}Video Processing{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto fade-in">
+    <!-- Processing Status Section (shown while processing) -->
+    <div id="processingSection">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Progress -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-surface-100">
+                        <div class="flex items-center gap-2">
+                            <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 pulse-dot"></div>
+                            <h2 class="text-sm font-semibold text-surface-800">Processing Status</h2>
+                            <span id="statusBadge" class="ml-auto text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Processing</span>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <!-- Overall progress -->
+                        <div class="mb-6">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-medium text-surface-700">Overall Progress</span>
+                                <span class="text-sm font-bold text-brand-600" id="progressPercent">0%</span>
+                            </div>
+                            <div class="w-full h-3 bg-surface-100 rounded-full overflow-hidden">
+                                <div id="progressBar" class="h-full bg-gradient-to-r from-brand-500 to-brand-600 rounded-full progress-animate" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Current step -->
+                        <div class="flex items-center gap-3 p-4 bg-surface-50 rounded-xl">
+                            <svg id="stepSpinner" class="w-5 h-5 text-brand-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                            <svg id="stepDone" class="w-5 h-5 text-emerald-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                <p class="text-sm font-medium text-surface-800" id="currentStep">Initializing…</p>
+                                <p class="text-xs text-surface-400" id="stepProgress">Waiting for processing to start</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Metadata -->
+            <div class="space-y-6">
+                <!-- Video Info Card -->
+                <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-surface-100">
+                        <h3 class="text-sm font-semibold text-surface-800">Video Info</h3>
+                    </div>
+                    <div class="p-6 space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-xs text-surface-400">ID</span>
+                            <span class="text-xs font-mono text-surface-700">{{ video_id[:12] }}…</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-surface-400">Filename</span>
+                            <span class="text-xs text-surface-700 truncate max-w-[160px]" id="metaFilename">—</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-surface-400">Size</span>
+                            <span class="text-xs text-surface-700" id="metaSize">—</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-surface-400">Format</span>
+                            <span class="text-xs text-surface-700 uppercase" id="metaExt">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Options -->
+                <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-surface-100">
+                        <h3 class="text-sm font-semibold text-surface-800">Processing Options</h3>
+                    </div>
+                    <div class="p-6" id="optionsList">
+                        <p class="text-xs text-surface-400">Loading…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Section (shown when processing complete) -->
+    <div id="resultSection" class="hidden">
+        <!-- Video Players -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Original -->
+            <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-surface-100">
+                    <h3 class="text-sm font-semibold text-surface-800">Original</h3>
+                </div>
+                <div class="p-4">
+                    <video id="originalVideo" controls class="w-full rounded-xl bg-black aspect-video">
+                        <source src="/api/video/{{ video_id }}?type=original" type="video/mp4">
+                    </video>
+                </div>
+            </div>
+            <!-- Processed -->
+            <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-surface-100">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-semibold text-surface-800">Processed</h3>
+                        <span class="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Ready</span>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <video id="processedVideo" controls class="w-full rounded-xl bg-black aspect-video">
+                    </video>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-surface-100">
+                <h3 class="text-sm font-semibold text-surface-800">Actions</h3>
+            </div>
+            <div class="p-6 flex flex-wrap gap-3">
+                <a id="downloadBtn" href="/api/video/{{ video_id }}?type=processed" download
+                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download Processed
+                </a>
+                <button id="shareBtn" onclick="generateShareLink()"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-surface-200 hover:bg-surface-50 text-surface-700 text-sm font-semibold rounded-xl shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                    Generate Share Link
+                </button>
+                <a href="/upload"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-surface-200 hover:bg-surface-50 text-surface-700 text-sm font-semibold rounded-xl shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Upload Another
+                </a>
+            </div>
+
+            <!-- Share link output -->
+            <div id="shareLinkWrap" class="hidden px-6 pb-6">
+                <div class="flex items-center gap-2 p-3 bg-surface-50 rounded-xl border border-surface-200">
+                    <input id="shareLinkInput" type="text" readonly class="flex-1 bg-transparent text-sm font-mono text-surface-700 outline-none truncate">
+                    <button onclick="copyShareLink()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-all">
+                        Copy
+                    </button>
+                </div>
+                <p class="mt-1.5 text-[11px] text-surface-400">Link expires in 24 hours · Max 100 views</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error section -->
+    <div id="errorSection" class="hidden">
+        <div class="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
+            <div class="p-8 text-center">
+                <svg class="w-12 h-12 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                <h3 class="text-lg font-semibold text-surface-800 mb-1">Processing Failed</h3>
+                <p class="text-sm text-surface-500 mb-4" id="errorMessage">An error occurred during processing.</p>
+                <a href="/upload" class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all">
+                    Try Again
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const VIDEO_ID = '{{ video_id }}';
+
+    function formatBytes(b) {
+        if (!b) return '—';
+        const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(b) / Math.log(k));
+        return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + s[i];
+    }
+
+    // Load metadata
+    async function loadMeta() {
+        try {
+            const res = await fetch(`/api/video/${VIDEO_ID}/metadata`);
+            if (!res.ok) return;
+            const m = await res.json();
+            document.getElementById('metaFilename').textContent = m.original_filename || '—';
+            document.getElementById('metaSize').textContent = formatBytes(m.file_size);
+            document.getElementById('metaExt').textContent = m.extension || '—';
+
+            const opts = m.processing_options || {};
+            const ol = document.getElementById('optionsList');
+            const items = [];
+            if (opts.edit_operations) items.push('<span class="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-lg">AI Editing (' + opts.edit_operations.length + ' ops)</span>');
+            if (opts.remove_silence) items.push('<span class="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-lg">Silence Removal</span>');
+            if (opts.auto_crop_face) items.push('<span class="inline-flex items-center gap-1 text-xs bg-teal-50 text-teal-700 px-2 py-1 rounded-lg">Face Crop</span>');
+            ol.innerHTML = items.length ? '<div class="flex flex-wrap gap-2">' + items.join('') + '</div>' : '<p class="text-xs text-surface-400">No special processing</p>';
+
+            // If already completed, jump to result
+            if (m.status === 'completed' || m.processed) {
+                showResult();
+                return;
+            }
+            if (m.status === 'error') {
+                showError('Processing failed');
+                return;
+            }
+        } catch (e) { console.warn('Meta load error:', e); }
+    }
+
+    // SSE for live progress
+    function startSSE() {
+        const es = new EventSource(`/api/video/${VIDEO_ID}/status/stream`);
+        es.addEventListener('status', (event) => {
+            try {
+                const d = JSON.parse(event.data);
+                const pct = Math.round(d.progress || 0);
+                document.getElementById('progressBar').style.width = pct + '%';
+                document.getElementById('progressPercent').textContent = pct + '%';
+
+                const details = d.processing_details || {};
+                if (details.current_step) {
+                    document.getElementById('currentStep').textContent = details.current_step;
+                    document.getElementById('stepProgress').textContent = `Step progress: ${Math.round(details.current_step_progress || 0)}%`;
+                }
+
+                if (d.status === 'completed' || d.processed || pct >= 100) {
+                    es.close();
+                    showResult();
+                } else if (d.status === 'error') {
+                    es.close();
+                    showError('Processing encountered an error');
+                }
+            } catch (e) {
+                console.error('SSE parse error:', e);
+            }
+        });
+        es.addEventListener('error', (event) => {
+            try {
+                const d = JSON.parse(event.data);
+                showError(d.error || 'Connection error');
+            } catch (e) {
+                // connection lost — might be completed
+                setTimeout(() => loadMeta(), 1000);
+            }
+            es.close();
+        });
+    }
+
+    function showResult() {
+        document.getElementById('processingSection').classList.add('hidden');
+        document.getElementById('errorSection').classList.add('hidden');
+        const rs = document.getElementById('resultSection');
+        rs.classList.remove('hidden');
+        rs.classList.add('fade-in');
+        // Set processed video source
+        const pv = document.getElementById('processedVideo');
+        pv.src = `/api/video/${VIDEO_ID}?type=processed`;
+        pv.load();
+    }
+
+    function showError(msg) {
+        document.getElementById('processingSection').classList.add('hidden');
+        document.getElementById('resultSection').classList.add('hidden');
+        document.getElementById('errorMessage').textContent = msg;
+        const es = document.getElementById('errorSection');
+        es.classList.remove('hidden');
+        es.classList.add('fade-in');
+        document.getElementById('statusDot').classList.remove('bg-amber-400');
+        document.getElementById('statusDot').classList.add('bg-red-400');
+        document.getElementById('statusBadge').textContent = 'Error';
+        document.getElementById('statusBadge').classList.remove('bg-amber-100', 'text-amber-700');
+        document.getElementById('statusBadge').classList.add('bg-red-100', 'text-red-700');
+    }
+
+    // Share link
+    async function generateShareLink() {
+        const btn = document.getElementById('shareBtn');
+        btn.disabled = true;
+        btn.textContent = 'Generating…';
+        try {
+            const res = await fetch(`/api/video/${VIDEO_ID}/share`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expires_in_hours: 24, max_views: 100 })
+            });
+            if (!res.ok) throw new Error('Failed to generate link');
+            const data = await res.json();
+            const url = window.location.origin + data.share_url;
+            document.getElementById('shareLinkInput').value = url;
+            document.getElementById('shareLinkWrap').classList.remove('hidden');
+            window.showToast('Share link generated!', 'success');
+        } catch (e) {
+            window.showToast('Failed to generate share link', 'error');
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg> Generate Share Link';
+    }
+
+    function copyShareLink() {
+        const input = document.getElementById('shareLinkInput');
+        navigator.clipboard.writeText(input.value).then(() => {
+            window.showToast('Link copied to clipboard!', 'success');
+        });
+    }
+
+    // Init
+    loadMeta();
+    startSSE();
+</script>
+{% endblock %}
