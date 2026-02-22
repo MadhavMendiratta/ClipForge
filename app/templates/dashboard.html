@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-form {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .video-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .video-box {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .status-indicator {
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .processing-details {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        video {
+            width: 100%;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ title }}</h1>
+
+    <div class="upload-form">
+        <h2>Upload Video</h2>
+        <form id="uploadForm">
+            <input type="file" name="video" accept="video/*" required>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+
+    <div class="status-indicator" id="statusIndicator" style="display: none;">
+        <div>Processing status: <span id="processingStatus">Uploading...</span></div>
+        <div class="progress-bar">
+            <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+        <div class="processing-details" id="processingDetails"></div>
+    </div>
+
+    <div class="video-container" id="videoContainer" style="display: none;">
+        <div class="video-box">
+            <h3>Original Video</h3>
+            <video id="originalVideo" controls></video>
+        </div>
+        <div class="video-box">
+            <h3>Processed Video</h3>
+            <video id="processedVideo" controls></video>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const processingStatus = document.getElementById('processingStatus');
+        const videoContainer = document.getElementById('videoContainer');
+        const originalVideo = document.getElementById('originalVideo');
+        const processedVideo = document.getElementById('processedVideo');
+
+        uploadForm.onsubmit = async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(uploadForm);
+            statusIndicator.style.display = 'block';
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Start monitoring processing status
+                    monitorProcessingStatus(result.video_id);
+                    // Show original video
+                    originalVideo.src = `/api/video/${result.video_id}?type=original`;
+                    videoContainer.style.display = 'flex';
+                } else {
+                    throw new Error(result.detail);
+                }
+            } catch (error) {
+                processingStatus.textContent = `Error: ${error.message}`;
+            }
+        };
+
+        function monitorProcessingStatus(videoId) {
+            const eventSource = new EventSource(`/api/video/${videoId}/status/stream`);
+            const progressBar = document.getElementById('progressBar');
+            const processingDetails = document.getElementById('processingDetails');
+
+            eventSource.addEventListener('status', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    processingStatus.textContent = `Status: ${data.status}`;
+
+                    // Update progress bar
+                    progressBar.style.width = `${data.progress}%`;
+
+                    // Update processing details
+                    if (data.processing_details.current_step) {
+                        processingDetails.textContent =
+                            `Step ${data.processing_details.current_step} ` +
+                            `(${Math.round(data.processing_details.current_step_progress)}%) - ` +
+                            `Overall: ${Math.round(data.progress)}%`;
+                    }
+
+                    // Close connection if processing is complete
+                    if (data.processed || data.status === 'completed' || data.status === 'error' || data.progress >= 100) {
+                        eventSource.close();
+                        if (data.status === 'completed') {
+                            // Load processed video when ready
+                            processedVideo.src = `/api/video/${videoId}?type=processed`;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error);
+                    processingStatus.textContent = `Error: Invalid server response`;
+                    eventSource.close();
+                }
+            });
+
+            eventSource.addEventListener('error', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    processingStatus.textContent = `Error: ${data.error}`;
+                } catch (error) {
+                    processingStatus.textContent = `Error: Connection lost`;
+                }
+                eventSource.close();
+            });
+
+            // Handle connection closure
+            eventSource.addEventListener('close', () => {
+                console.log('SSE connection closed');
+            });
+        }
+    </script>
+</body>
+</html>
