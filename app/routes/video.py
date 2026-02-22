@@ -14,7 +14,6 @@ from app.utils.files import get_metadata, get_video_file
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 def video_stream_generator(video_path: str, chunk_size: int = 1024 * 1024):
     """
     Generator function to stream video file in chunks.
