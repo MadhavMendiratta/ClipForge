@@ -7,6 +7,8 @@ from typing import Callable, Optional
 
 import cv2
 import mediapipe as mp
+from mediapipe import tasks
+from mediapipe.tasks.python import vision
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,9 @@ SAMPLE_FRAME_COUNT = 60
 
 # Smoothing window for face center positions
 SMOOTHING_WINDOW = 5
+
+# Path to the face detection model (relative to working directory)
+_MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "blaze_face_short_range.tflite"
 
 
 def _sample_face_positions(
@@ -44,13 +49,23 @@ def _sample_face_positions(
     if total_frames <= 0:
         raise RuntimeError(f"Cannot determine frame count: {input_path}")
 
+    video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
     # Evenly sample frame indices
     indices = np.linspace(0, total_frames - 1, min(sample_count, total_frames), dtype=int)
 
     face_positions: list[tuple[float, float, float, float]] = []
 
-    mp_face = mp.solutions.face_detection
-    with mp_face.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection:
+    # Use the new MediaPipe Tasks API
+    base_options = tasks.BaseOptions(model_asset_path=str(_MODEL_PATH))
+    options = vision.FaceDetectorOptions(
+        base_options=base_options,
+        min_detection_confidence=0.5,
+    )
+    detector = vision.FaceDetector.create_from_options(options)
+
+    try:
         for idx in indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
             ret, frame = cap.read()
@@ -58,15 +73,21 @@ def _sample_face_positions(
                 continue
 
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = face_detection.process(rgb)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            results = detector.detect(mp_image)
 
             if results.detections:
                 # Use the first (most confident) detection
                 det = results.detections[0]
-                bb = det.location_data.relative_bounding_box
-                cx = bb.xmin + bb.width / 2
-                cy = bb.ymin + bb.height / 2
-                face_positions.append((cx, cy, bb.width, bb.height))
+                bb = det.bounding_box
+                # Convert pixel coords to normalized [0, 1]
+                cx = (bb.origin_x + bb.width / 2) / video_width
+                cy = (bb.origin_y + bb.height / 2) / video_height
+                norm_w = bb.width / video_width
+                norm_h = bb.height / video_height
+                face_positions.append((cx, cy, norm_w, norm_h))
+    finally:
+        detector.close()
 
     cap.release()
 
